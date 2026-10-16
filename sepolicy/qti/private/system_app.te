@@ -1,0 +1,2 @@
+# Allow GameSpace to find game_space_service
+allow system_app game_space_service:service_manager find;

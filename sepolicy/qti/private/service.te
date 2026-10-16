@@ -1,2 +1,5 @@
 # Horae
 type horae_service, system_api_service, service_manager_type;
+
+# GameSpace
+type game_space_service, system_api_service, system_server_service, service_manager_type;
