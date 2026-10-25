@@ -2,6 +2,9 @@
 r_dir_file(system_app, vendor_sysfs_usb_supply)
 allow system_app vendor_sysfs_usb_supply:file rw_file_perms;
 
+# DC Dimming
+allow system_app vendor_sysfs_dc_dimming:file rw_file_perms;
+
 # LTPO Settings
 rw_dir_file(system_app, vendor_sysfs_graphics)
 
