@@ -1,3 +1,10 @@
 # SystemUI reads these platform props for the USB webcam and Bluetooth LE audio tiles.
 get_prop(platform_app, usb_uvc_enabled_prop)
 get_prop(platform_app, bluetooth_lea_prop)
+
+# Allow Launcher3 to query ZRAM size for Recents meminfo
+r_dir_file(platform_app, sysfs_zram)
+
+# Allow ColorOS gallery to read touch prop and communicate with horae
+get_prop(platform_app, system_oplus_touch_prop)
+binder_call(platform_app, horae)
