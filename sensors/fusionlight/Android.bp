@@ -27,6 +27,7 @@ cc_library_shared {
         "vendor.oplus.hardware.displaypanelfeature-V1-ndk",
         "vendor.oplus.hardware.oplusSensor-V1-ndk",
         "vendor.qti.hardware.display.config-V12-ndk",
+        "vendor.lineage.oplus_als-V1-ndk",
     ],
     static_libs: [
         "libaidlcommonsupport",

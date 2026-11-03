@@ -32,13 +32,16 @@ namespace lineage {
 namespace oplus_als {
 
 AreaCapture::AreaCapture() {
-    int left, top, right, bottom;
+    int left = 0, top = 0, right = 0, bottom = 0;
     std::istringstream is(GetProperty("vendor.sensors.als_correction.grabrect", ""));
 
     is >> left >> top >> right >> bottom;
-    if (left == 0) {
-        LOG_ALWAYS_FATAL("No screenshot grab area config");
-        return;
+    if (right <= left || bottom <= top) {
+        ALOGW("No valid screenshot grab area config, falling back to 755 50 795 120");
+        left = 755;
+        top = 50;
+        right = 795;
+        bottom = 120;
     }
 
     ALOGI("Screenshot grab area: %d %d %d %d", left, top, right, bottom);
@@ -49,12 +52,20 @@ AreaCapture::AreaCapture() {
 // frameworks/base/core/java/android/view/SurfaceControl.java
 sp<IBinder> AreaCapture::getInternalDisplayToken() {
     const auto displayIds = SurfaceComposerClient::getPhysicalDisplayIds();
+    if (displayIds.empty()) {
+        ALOGW("No physical display IDs found");
+        return nullptr;
+    }
     return SurfaceComposerClient::getPhysicalDisplayToken(displayIds[0]);
 }
 
 ndk::ScopedAStatus AreaCapture::getAreaBrightness(AreaRgbCaptureResult* _aidl_return) {
     DisplayCaptureArgs displayCaptureArgs;
     displayCaptureArgs.displayToken = getInternalDisplayToken();
+    if (displayCaptureArgs.displayToken == nullptr) {
+        ALOGE("Capture failed: no display token");
+        return ndk::ScopedAStatus::fromServiceSpecificError(-1);
+    }
     displayCaptureArgs.captureArgs.pixelFormat = ::android::PIXEL_FORMAT_RGBA_8888;
     displayCaptureArgs.captureArgs.sourceCrop = toARect(m_screenshot_rect);
     displayCaptureArgs.width = m_screenshot_rect.getWidth();

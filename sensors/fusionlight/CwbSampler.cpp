@@ -5,10 +5,13 @@
 
 #include "CwbSampler.h"
 
+#include <aidl/vendor/lineage/oplus_als/IAreaCapture.h>
 #include <aidl/vendor/qti/hardware/display/config/BnDisplayConfigCallback.h>
 #include <aidl/vendor/qti/hardware/display/config/IDisplayConfig.h>
 #include <aidlcommonsupport/NativeHandle.h>
+#include <android/binder_manager.h>
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <ui/ColorSpace.h>
 #include <ui/GraphicBuffer.h>
 
@@ -23,6 +26,8 @@ namespace {
 
 using namespace std::chrono_literals;
 
+using aidl::vendor::lineage::oplus_als::AreaRgbCaptureResult;
+using aidl::vendor::lineage::oplus_als::IAreaCapture;
 using aidl::android::hardware::common::NativeHandle;
 using aidl::vendor::qti::hardware::display::config::Attributes;
 using aidl::vendor::qti::hardware::display::config::BnDisplayConfigCallback;
@@ -251,8 +256,9 @@ void CwbSampler::threadLoop() {
     const auto& state = state_;
     const auto& config = config_;
     const auto& sample_callback = state->sample_callback;
-    const auto period = config.screenshot_period;
+    const auto period = config.screenshot_period > 0ns ? config.screenshot_period : 100ms;
     auto next_sample = std::chrono::steady_clock::now();
+    std::shared_ptr<IAreaCapture> als_service;
     std::shared_ptr<IDisplayConfig> service;
     sp<GraphicBuffer> buffer;
     Rect crop;
@@ -266,6 +272,56 @@ void CwbSampler::threadLoop() {
                 return;
             }
             state->immediate = false;
+        }
+
+        // Try AreaCapture service (SurfaceFlinger screenshot based)
+        if (als_service == nullptr || als_service->asBinder().get() == nullptr ||
+            !AIBinder_isAlive(als_service->asBinder().get())) {
+            const std::string instance = std::string(IAreaCapture::descriptor) + "/default";
+            if (AServiceManager_isDeclared(instance.c_str())) {
+                als_service = IAreaCapture::fromBinder(
+                        ndk::SpAIBinder(AServiceManager_checkService(instance.c_str())));
+            }
+        }
+
+        if (als_service != nullptr) {
+            const auto frame_start = GetBootTime();
+            AreaRgbCaptureResult rgb_result;
+            const auto status = als_service->getAreaBrightness(&rgb_result);
+            const auto frame_end = GetBootTime();
+
+            std::optional<CwbSample> sample;
+            if (status.isOk()) {
+                sample = CwbSample{
+                        std::clamp(static_cast<int32_t>(rgb_result.r), 0, 255),
+                        std::clamp(static_cast<int32_t>(rgb_result.g), 0, 255),
+                        std::clamp(static_cast<int32_t>(rgb_result.b), 0, 255),
+                        frame_start,
+                        frame_end,
+                };
+            } else {
+                LOG(WARNING) << "IAreaCapture::getAreaBrightness failed: "
+                             << status.getDescription();
+            }
+
+            if (sample_callback) {
+                sample_callback(std::move(sample));
+            }
+            next_sample += period;
+            if (next_sample < std::chrono::steady_clock::now()) {
+                next_sample = std::chrono::steady_clock::now();
+            }
+            continue;
+        }
+
+        // QTI CWB fallback (only if explicitly enabled via property, as it crashes on SM8650)
+        if (!android::base::GetBoolProperty("persist.vendor.sensors.fusionlight.cwb", false)) {
+            LOG(WARNING) << "IAreaCapture is unavailable and QTI CWB is disabled";
+            if (sample_callback) {
+                sample_callback(std::nullopt);
+            }
+            next_sample = std::chrono::steady_clock::now() + kServiceRetryPeriod;
+            continue;
         }
 
         if (service == nullptr || service->asBinder().get() == nullptr ||
