@@ -300,6 +300,18 @@ void SysfsPollingOneShotSensor::run() {
                 return ((mIsEnabled && mMode == OperationMode::NORMAL) || mStopThread);
             });
         } else {
+            /*
+             * The sysfs attribute is sticky: if the finger went down before
+             * this one-shot sensor was armed, the notification was missed
+             * and poll() would wait forever.  Read it once while arming and
+             * report the pending press.
+             */
+            if (readBool(mPollFd, true /* seek */)) {
+                activate(false, false, false);
+                mCallback->postEvents(readEvents(), isWakeUpSensor());
+                continue;
+            }
+
             // Cannot hold lock while polling.
             runLock.unlock();
             int rc = poll(mPolls, 2, -1);
