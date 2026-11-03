@@ -6,6 +6,7 @@
 #include "AreaCapture.h"
 
 #include <android-base/properties.h>
+#include <android/gui/SecureLayerMode.h>
 #include <gui/AidlUtil.h>
 #include <gui/SurfaceComposerClient.h>
 #include <gui/SyncScreenCaptureListener.h>
@@ -58,7 +59,7 @@ ndk::ScopedAStatus AreaCapture::getAreaBrightness(AreaRgbCaptureResult* _aidl_re
     displayCaptureArgs.captureArgs.sourceCrop = toARect(m_screenshot_rect);
     displayCaptureArgs.width = m_screenshot_rect.getWidth();
     displayCaptureArgs.height = m_screenshot_rect.getHeight();
-    displayCaptureArgs.captureArgs.captureSecureLayers = true;
+    displayCaptureArgs.captureArgs.secureLayerMode = ::android::gui::SecureLayerMode::Capture;
 
     sp<SyncScreenCaptureListener> captureListener = new SyncScreenCaptureListener();
     if (ScreenshotClient::captureDisplay(displayCaptureArgs, captureListener) !=
